@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Flowchart Generator</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+
+        .node {
+            stroke: #fff;
+            /* stroke-width: 1px; */
+        }
+
+        text {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+    </style>
+</head>
+
+<body>
+    <script src="env.js"></script>
+    <script>
+        window.onload = function () {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            const svg = d3.select("body").append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const g = svg.append('g');
+
+            axios.get(`https://api.airtable.com/v0/${app}/${table}?filterByFormula=FIND(%22Emalytics%22%2C+Projekt)+%3E+0`, { headers: { 'Authorization': `Bearer ${api_key}` } })
+                .then(response => {
+                    const records = response.data.records;
+                    let nodes = records.map(record => ({ id: record.id, label: record.fields.Name }));
+                    const links = records.reduce((acc, record) => {
+                        if (record.fields[linkField]) {
+                            record.fields[linkField].forEach(link => {
+                                acc.push({ source: record.id, target: link });
+                            });
+                        }
+                        return acc;
+                    }, []);
+
+                    const drag = simulation => {
+
+                        function dragstarted(event, d) {
+                            if (!event.active) simulation.alphaTarget(0.3).restart();
+                            d.fx = d.x;
+                            d.fy = d.y;
+                        }
+
+                        function dragged(event, d) {
+                            d.fx = event.x;
+                            d.fy = event.y;
+                        }
+
+                        function dragended(event, d) {
+                            if (!event.active) simulation.alphaTarget(0);
+                            d.fx = null;
+                            d.fy = null;
+                        }
+
+                        return d3.drag()
+                            .on("start", dragstarted)
+                            .on("drag", dragged)
+                            .on("end", dragended);
+                    }
+
+                    // create a map of child -> parent relationships
+                    let childToParent = {};
+                    links.forEach(link => {
+                        childToParent[link.target] = link.source;
+                    });
+
+                    // transform nodes to have a parent field
+                    nodes = nodes.map(node => {
+                        return { ...node, parent: childToParent[node.id] };
+                    });
+
+                    console.log(nodes, links)
+
+                    // now you can use d3.stratify()
+                    let stratify = d3.stratify()
+                        .id(d => d.id)
+                        .parentId(d => d.parent);
+
+                    let root = stratify(nodes);
+
+                    // const root = d3.stratify()
+                    //     .id(d => d.id)
+                    //     .parentId(d => d.target)(links);
+
+                    const tree = d3.tree().size([height, width]);
+
+                    tree(root);
+
+                    // const link = g.selectAll(".link")
+                    //     .data(root.links())
+                    //     .enter().append("path")
+                    //     .attr("class", "link")
+                    //     // .attr('marker-end', 'url(#arrowhead)')
+                    // .attr("d", d3.linkVertical()
+                    //     .x(d => d.y)
+                    //     .y(d => d.x));
+
+                    // var line = d3.svg.line()
+
+                    var link = svg.selectAll(".link")
+                        .data(root.links())
+                        .enter().append("path")
+                        .attr("class", "link")
+                        .attr("d", d3.line())
+                        .attr("fill", "none")
+                        .attr("stroke", "black");
+
+                    const node = g.selectAll(".node")
+                        .data(root.descendants())
+                        .enter().append("g")
+                        .attr("class", d => "node" + (d.children ? " node--internal" : " node--leaf"))
+                        .attr("transform", d => `translate(${d.y},${d.x})`)
+                        .call(drag(simulation));
+
+                    node.append("rect")
+                        .attr("rx", 5)
+                        .attr("ry", 5)
+                        .attr("width", d => d.data.label.length * 8)
+                        .attr("height", 30)
+                        .attr("y", -15)
+                        .attr("x", d => -d.data.label.length * 4);
+
+                    node.append("text")
+                        .attr("dy", 5)
+                        .attr("text-anchor", "middle")
+                        .text(d => d.data.label);
+                })
+                .catch(error => console.log(error));
+
+            // SVG Export
+            const serializer = new XMLSerializer();
+            const svg_blob = new Blob([serializer.serializeToString(svg.node())], { 'type': "image/svg+xml" });
+            const download_link = document.createElement("a");
+            download_link.href = URL.createObjectURL(svg_blob);
+            download_link.download = "flowchart.svg";
+            document.body.appendChild(download_link);
+        };
+
+    </script>
+</body>
+
+</html>

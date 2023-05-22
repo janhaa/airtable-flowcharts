@@ -30,11 +30,6 @@ window.onload = function() {
           },
     };
 
-    const app = "appXXX";
-    const table = "Table%201";
-    const api_key = "xxxxxxxxxxxxxxxxx.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-    const linkField = "Linked"
-
     axios.get(`https://api.airtable.com/v0/${app}/${table}?filterByFormula=FIND(%22Emalytics%22%2C+Projekt)+%3E+0`, { headers: { 'Authorization': `Bearer ${api_key}` } })
     .then(response => {
         const records = response.data.records;
